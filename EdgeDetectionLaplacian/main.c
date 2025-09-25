@@ -153,79 +153,82 @@ BMP8Image* BMP8Convolution(BMP8Image* img, mask* m){
     return convImg;
 }
 
-BMP8Image* BMP8EdgeDetectionPrewittHorizontal(BMP8Image* img){
+BMP8Image* BMP8EdgeDetectionLaplacianNegative(BMP8Image* img){
     if(!img){
         fprintf(stderr, "Edge Detection Error: No image provided.\n");
         return NULL;
     }
 
-    // Create a 3x3 mask for convolution
+    // Create a 3x3 convolution mask
     mask* m = maskCreate(3, 3);
     if(!m || !m->data){
         fprintf(stderr, "Error: Could not allocate mask.\n");
         return NULL;
     }
 
-    // Prewitt operator for horizontal edge detection
-    int PrewittH[3][3] = {
-        {-1, -1, -1},
-        { 0,  0,  0},
-        { 1,  1,  1}
+    // Laplacian kernel (negative version)
+    // Detects edges with center = +4, neighbors = -1
+    int maskL[3][3] = {
+        { 0, -1,  0},
+        {-1,  4, -1},
+        { 0, -1,  0}
     };
 
-    // Copy Prewitt horizontal values into the mask
+    // Copy kernel values into the mask struct
     for(int j = 0; j < m->cols; j++){
         for(int i = 0; i < m->rows; i++){
-            m->data[i * m->cols + j] = PrewittH[i][j];
+            m->data[i * m->cols + j] = maskL[i][j];
         }
     }
 
-    // Apply convolution with the horizontal Prewitt mask
+    // Apply convolution to the image using the Laplacian mask
     BMP8Image *convolved = BMP8Convolution(img, m);
 
     // Free mask memory
     maskFree(m);
 
-    // Return the convolved image containing horizontal edges
+    // Return the result image with detected edges
     return convolved;
 }
 
-BMP8Image* BMP8EdgeDetectionPrewittVertical(BMP8Image* img){
+BMP8Image* BMP8EdgeDetectionLaplacianPositive(BMP8Image* img){
     if(!img){
         fprintf(stderr, "Edge Detection Error: No image provided.\n");
         return NULL;
     }
 
-    // Create a 3x3 mask for convolution
+    // Create a 3x3 convolution mask
     mask* m = maskCreate(3, 3);
     if(!m || !m->data){
         fprintf(stderr, "Error: Could not allocate mask.\n");
         return NULL;
     }
 
-    // Prewitt operator for vertical edge detection
-    int PrewittV[3][3] = {
-        {-1,  0,  1},
-        {-1,  0,  1},
-        {-1,  0,  1}
+    // Laplacian kernel (positive version)
+    // Detects edges with center = -4, neighbors = +1
+    int LaplacianV[3][3] = {
+        { 0,  1,  0},
+        { 1, -4,  1},
+        { 0,  1,  0}
     };
 
-    // Copy Prewitt vertical values into the mask
+    // Copy kernel values into the mask struct
     for(int j = 0; j < m->cols; j++){
         for(int i = 0; i < m->rows; i++){
-            m->data[i * m->cols + j] = PrewittV[i][j];
+            m->data[i * m->cols + j] = LaplacianV[i][j];
         }
     }
 
-    // Apply convolution with the vertical Prewitt mask
+    // Apply convolution to the image using the Laplacian mask
     BMP8Image *convolved = BMP8Convolution(img, m);
 
     // Free mask memory
     maskFree(m);
 
-    // Return the convolved image containing vertical edges
+    // Return the result image with detected edges
     return convolved;
 }
+
 
 // Free memory used by BMP8Image
 void BMP8Free(BMP8Image* img) {
@@ -233,59 +236,6 @@ void BMP8Free(BMP8Image* img) {
         free(img->data);
         free(img);
     }
-}
-
-BMP8Image* BMP8EdgeDetectionPrewittCombined(BMP8Image* img){
-    if(!img){
-        fprintf(stderr, "Edge Detection Error: No image provided.\n");
-        return NULL;
-    }
-
-    // Calculate horizontal edges
-    BMP8Image* horizontal = BMP8EdgeDetectionPrewittHorizontal(img);
-    // Calculate vertical edges
-    BMP8Image* vertical   = BMP8EdgeDetectionPrewittVertical(img);
-
-    // Allocate new image for combined edges
-    BMP8Image* edgeImg = malloc(sizeof(BMP8Image));
-    memcpy(edgeImg->header, img->header, BMP_HEADER_SIZE);
-    edgeImg->width = img->width;
-    edgeImg->height = img->height;
-    edgeImg->bitDepth = img->bitDepth;
-
-    // Copy color table for 8-bit grayscale images
-    if (img->bitDepth <= 8){
-        memcpy(edgeImg->colorTable, img->colorTable, BMP_COLOR_TABLE_SIZE);
-    }
-
-    int rowSize = (img->width + 3) & ~3;
-    edgeImg->imgSize = rowSize * img->height;
-
-    // Allocate memory for pixel data
-    edgeImg->data = malloc(edgeImg->imgSize);
-
-    // Combine horizontal and vertical edges
-    for(int y = 0; y < img->height; y++){
-        for(int x = 0; x < img->width; x++){
-            int idx = y * img->width + x;
-            // horizontal
-            int gx = horizontal->data[idx];
-            // vertical
-            int gy = vertical->data[idx];
-            // Compute mean magnitude
-            int g = (int)(sqrt(gx*gx + gy*gy));
-            g = MIN(g, MAX_BRIGHTNESS);
-
-            edgeImg->data[idx] = (unsigned char)g;
-        }
-    }
-
-    // Free temporary horizontal and vertical images
-    BMP8Free(horizontal);
-    BMP8Free(vertical);
-
-    // Return combined edge image
-    return edgeImg;
 }
 
 // Function to save an 8-bit BMP image to a file
@@ -308,40 +258,37 @@ void BMP8save(const char* filename, BMP8Image* img) {
 }
 
 int main(){
+    // Input BMP file (8-bit grayscale)
     const char *inputFile  = "../Test_Images/lizard_greyscale8bit.bmp";
 
-    // Output files
-    const char *outputHorizontal = "images/lizard_edges_horizontal.bmp";
-    const char *outputVertical   = "images/lizard_edges_vertical.bmp";
-    const char *outputCombined   = "images/lizard_edges_combined.bmp";
+    // Output BMP file paths
+    const char *outputNegative = "images/lizard_laplacian_negative.bmp";
+    const char *outputPositive = "images/lizard_laplacian_positive.bmp";
 
-    // Read the original BMP image
+    // Step 1: Read the original image
     BMP8Image *image = BMP8read(inputFile);
     if(!image){
         fprintf(stderr, "Error: Could not read input BMP file.\n");
         return 1;
     }
 
-    // Apply horizontal edge detection
-    BMP8Image *horizontal = BMP8EdgeDetectionPrewittHorizontal(image);
-    BMP8save(outputHorizontal, horizontal);
+    // Step 2: Apply Laplacian Negative edge detection
+    BMP8Image *negative = BMP8EdgeDetectionLaplacianNegative(image);
+    BMP8save(outputNegative, negative);
 
-    // Apply vertical edge detection
-    BMP8Image *vertical = BMP8EdgeDetectionPrewittVertical(image);
-    BMP8save(outputVertical, vertical);
+    // Step 3: Apply Laplacian Positive edge detection
+    BMP8Image *positive = BMP8EdgeDetectionLaplacianPositive(image);
+    BMP8save(outputPositive, positive);
 
-    // Apply combined edge detection
-    BMP8Image *combined = BMP8EdgeDetectionPrewittCombined(image);
-    BMP8save(outputCombined, combined);
-
-    // Free all allocated memory
+    // Step 5: Free all allocated memory
     BMP8Free(image);
-    BMP8Free(horizontal);
-    BMP8Free(vertical);
-    BMP8Free(combined);
+    BMP8Free(negative);
+    BMP8Free(positive);
 
-    printf("Prewitt edge detection completed!\nHorizontal: %s\nVertical: %s\nCombined: %s\n",
-           outputHorizontal, outputVertical, outputCombined);
+    // Step 6: Print completion message
+    printf("Laplacian edge detection completed!\n");
+    printf("Negative: %s\nPositive: %s\n",
+           outputNegative, outputPositive);
 
     return 0;
 }

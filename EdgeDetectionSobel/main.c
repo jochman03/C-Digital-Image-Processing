@@ -153,7 +153,7 @@ BMP8Image* BMP8Convolution(BMP8Image* img, mask* m){
     return convImg;
 }
 
-BMP8Image* BMP8EdgeDetectionPrewittHorizontal(BMP8Image* img){
+BMP8Image* BMP8EdgeDetectionSobelHorizontal(BMP8Image* img){
     if(!img){
         fprintf(stderr, "Edge Detection Error: No image provided.\n");
         return NULL;
@@ -166,21 +166,21 @@ BMP8Image* BMP8EdgeDetectionPrewittHorizontal(BMP8Image* img){
         return NULL;
     }
 
-    // Prewitt operator for horizontal edge detection
-    int PrewittH[3][3] = {
-        {-1, -1, -1},
+    // Sobel operator for horizontal edge detection
+    int sobelH[3][3] = {
+        {-1, -2, -1},
         { 0,  0,  0},
-        { 1,  1,  1}
+        { 1,  2,  1}
     };
 
-    // Copy Prewitt horizontal values into the mask
+    // Copy Sobel horizontal values into the mask
     for(int j = 0; j < m->cols; j++){
         for(int i = 0; i < m->rows; i++){
-            m->data[i * m->cols + j] = PrewittH[i][j];
+            m->data[i * m->cols + j] = sobelH[i][j];
         }
     }
 
-    // Apply convolution with the horizontal Prewitt mask
+    // Apply convolution with the horizontal Sobel mask
     BMP8Image *convolved = BMP8Convolution(img, m);
 
     // Free mask memory
@@ -190,7 +190,7 @@ BMP8Image* BMP8EdgeDetectionPrewittHorizontal(BMP8Image* img){
     return convolved;
 }
 
-BMP8Image* BMP8EdgeDetectionPrewittVertical(BMP8Image* img){
+BMP8Image* BMP8EdgeDetectionSobelVertical(BMP8Image* img){
     if(!img){
         fprintf(stderr, "Edge Detection Error: No image provided.\n");
         return NULL;
@@ -203,21 +203,21 @@ BMP8Image* BMP8EdgeDetectionPrewittVertical(BMP8Image* img){
         return NULL;
     }
 
-    // Prewitt operator for vertical edge detection
-    int PrewittV[3][3] = {
-        {-1,  0,  1},
-        {-1,  0,  1},
-        {-1,  0,  1}
+    // Sobel operator for vertical edge detection
+    int sobelV[3][3] = {
+        { -1,  0,  1},
+        { -2,  0,  2},
+        { -1,  0,  1}
     };
 
-    // Copy Prewitt vertical values into the mask
+    // Copy Sobel vertical values into the mask
     for(int j = 0; j < m->cols; j++){
         for(int i = 0; i < m->rows; i++){
-            m->data[i * m->cols + j] = PrewittV[i][j];
+            m->data[i * m->cols + j] = sobelV[i][j];
         }
     }
 
-    // Apply convolution with the vertical Prewitt mask
+    // Apply convolution with the vertical Sobel mask
     BMP8Image *convolved = BMP8Convolution(img, m);
 
     // Free mask memory
@@ -227,6 +227,7 @@ BMP8Image* BMP8EdgeDetectionPrewittVertical(BMP8Image* img){
     return convolved;
 }
 
+
 // Free memory used by BMP8Image
 void BMP8Free(BMP8Image* img) {
     if (img) {
@@ -235,16 +236,16 @@ void BMP8Free(BMP8Image* img) {
     }
 }
 
-BMP8Image* BMP8EdgeDetectionPrewittCombined(BMP8Image* img){
+BMP8Image* BMP8EdgeDetectionSobelCombined(BMP8Image* img){
     if(!img){
         fprintf(stderr, "Edge Detection Error: No image provided.\n");
         return NULL;
     }
 
     // Calculate horizontal edges
-    BMP8Image* horizontal = BMP8EdgeDetectionPrewittHorizontal(img);
+    BMP8Image* horizontal = BMP8EdgeDetectionSobelHorizontal(img);
     // Calculate vertical edges
-    BMP8Image* vertical   = BMP8EdgeDetectionPrewittVertical(img);
+    BMP8Image* vertical   = BMP8EdgeDetectionSobelVertical(img);
 
     // Allocate new image for combined edges
     BMP8Image* edgeImg = malloc(sizeof(BMP8Image));
@@ -323,15 +324,15 @@ int main(){
     }
 
     // Apply horizontal edge detection
-    BMP8Image *horizontal = BMP8EdgeDetectionPrewittHorizontal(image);
+    BMP8Image *horizontal = BMP8EdgeDetectionSobelHorizontal(image);
     BMP8save(outputHorizontal, horizontal);
 
     // Apply vertical edge detection
-    BMP8Image *vertical = BMP8EdgeDetectionPrewittVertical(image);
+    BMP8Image *vertical = BMP8EdgeDetectionSobelVertical(image);
     BMP8save(outputVertical, vertical);
 
     // Apply combined edge detection
-    BMP8Image *combined = BMP8EdgeDetectionPrewittCombined(image);
+    BMP8Image *combined = BMP8EdgeDetectionSobelCombined(image);
     BMP8save(outputCombined, combined);
 
     // Free all allocated memory
@@ -340,7 +341,7 @@ int main(){
     BMP8Free(vertical);
     BMP8Free(combined);
 
-    printf("Prewitt edge detection completed!\nHorizontal: %s\nVertical: %s\nCombined: %s\n",
+    printf("Sobel edge detection completed!\nHorizontal: %s\nVertical: %s\nCombined: %s\n",
            outputHorizontal, outputVertical, outputCombined);
 
     return 0;

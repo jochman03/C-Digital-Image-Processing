@@ -153,80 +153,6 @@ BMP8Image* BMP8Convolution(BMP8Image* img, mask* m){
     return convImg;
 }
 
-BMP8Image* BMP8EdgeDetectionPrewittHorizontal(BMP8Image* img){
-    if(!img){
-        fprintf(stderr, "Edge Detection Error: No image provided.\n");
-        return NULL;
-    }
-
-    // Create a 3x3 mask for convolution
-    mask* m = maskCreate(3, 3);
-    if(!m || !m->data){
-        fprintf(stderr, "Error: Could not allocate mask.\n");
-        return NULL;
-    }
-
-    // Prewitt operator for horizontal edge detection
-    int PrewittH[3][3] = {
-        {-1, -1, -1},
-        { 0,  0,  0},
-        { 1,  1,  1}
-    };
-
-    // Copy Prewitt horizontal values into the mask
-    for(int j = 0; j < m->cols; j++){
-        for(int i = 0; i < m->rows; i++){
-            m->data[i * m->cols + j] = PrewittH[i][j];
-        }
-    }
-
-    // Apply convolution with the horizontal Prewitt mask
-    BMP8Image *convolved = BMP8Convolution(img, m);
-
-    // Free mask memory
-    maskFree(m);
-
-    // Return the convolved image containing horizontal edges
-    return convolved;
-}
-
-BMP8Image* BMP8EdgeDetectionPrewittVertical(BMP8Image* img){
-    if(!img){
-        fprintf(stderr, "Edge Detection Error: No image provided.\n");
-        return NULL;
-    }
-
-    // Create a 3x3 mask for convolution
-    mask* m = maskCreate(3, 3);
-    if(!m || !m->data){
-        fprintf(stderr, "Error: Could not allocate mask.\n");
-        return NULL;
-    }
-
-    // Prewitt operator for vertical edge detection
-    int PrewittV[3][3] = {
-        {-1,  0,  1},
-        {-1,  0,  1},
-        {-1,  0,  1}
-    };
-
-    // Copy Prewitt vertical values into the mask
-    for(int j = 0; j < m->cols; j++){
-        for(int i = 0; i < m->rows; i++){
-            m->data[i * m->cols + j] = PrewittV[i][j];
-        }
-    }
-
-    // Apply convolution with the vertical Prewitt mask
-    BMP8Image *convolved = BMP8Convolution(img, m);
-
-    // Free mask memory
-    maskFree(m);
-
-    // Return the convolved image containing vertical edges
-    return convolved;
-}
-
 // Free memory used by BMP8Image
 void BMP8Free(BMP8Image* img) {
     if (img) {
@@ -235,44 +161,101 @@ void BMP8Free(BMP8Image* img) {
     }
 }
 
-BMP8Image* BMP8EdgeDetectionPrewittCombined(BMP8Image* img){
+BMP8Image* BMP8EdgeDetectionRobertsGx(BMP8Image* img){
+    if(!img){
+        fprintf(stderr, "Edge Detection Error: No image provided.\n");
+        return NULL;
+    }
+    // Create a 2x2 mask for Roberts Gx (horizontal) edge detection
+    mask* m = maskCreate(2, 2);
+
+    // Define Roberts horizontal kernel
+    int maskR[2][2] = {
+        {1,  0},
+        {0, -1}
+    };
+
+    // Copy kernel values into mask structure
+    for(int j=0;j<m->cols;j++)
+        for(int i=0;i<m->rows;i++)
+            m->data[i*m->cols+j] = maskR[i][j];
+
+    // Apply convolution to image with Gx mask
+    BMP8Image* conv = BMP8Convolution(img,m);
+
+    // Free the temporary mask
+    maskFree(m);
+
+    // Return the image with horizontal edges
+    return conv;
+}
+
+BMP8Image* BMP8EdgeDetectionRobertsGy(BMP8Image* img){
+    if(!img){
+        fprintf(stderr, "Edge Detection Error: No image provided.\n");
+        return NULL;
+    }
+    // Create a 2x2 mask for Roberts Gy (vertical) edge detection
+    mask* m = maskCreate(2,2);
+
+    // Define Roberts vertical kernel
+    int maskR[2][2] = {
+        { 0, 1},
+        {-1, 0}
+    };
+
+    // Copy kernel values into mask structure
+    for(int j=0;j<m->cols;j++)
+        for(int i=0;i<m->rows;i++)
+            m->data[i*m->cols+j] = maskR[i][j];
+
+    // Apply convolution to image with Gy mask
+    BMP8Image* conv = BMP8Convolution(img,m);
+
+    // Free the temporary mask
+    maskFree(m);
+
+    // Return the image with vertical edges
+    return conv;
+}
+
+BMP8Image* BMP8EdgeDetectionRobertsCombined(BMP8Image* img){
     if(!img){
         fprintf(stderr, "Edge Detection Error: No image provided.\n");
         return NULL;
     }
 
-    // Calculate horizontal edges
-    BMP8Image* horizontal = BMP8EdgeDetectionPrewittHorizontal(img);
-    // Calculate vertical edges
-    BMP8Image* vertical   = BMP8EdgeDetectionPrewittVertical(img);
+    // Compute horizontal edges
+    BMP8Image* Gx = BMP8EdgeDetectionRobertsGx(img);
 
-    // Allocate new image for combined edges
+    // Compute vertical edges
+    BMP8Image* Gy = BMP8EdgeDetectionRobertsGy(img);
+
+    // Allocate new image for combined edge magnitude
     BMP8Image* edgeImg = malloc(sizeof(BMP8Image));
-    memcpy(edgeImg->header, img->header, BMP_HEADER_SIZE);
+    memcpy(edgeImg->header,img->header,BMP_HEADER_SIZE);
     edgeImg->width = img->width;
     edgeImg->height = img->height;
     edgeImg->bitDepth = img->bitDepth;
 
-    // Copy color table for 8-bit grayscale images
-    if (img->bitDepth <= 8){
-        memcpy(edgeImg->colorTable, img->colorTable, BMP_COLOR_TABLE_SIZE);
-    }
+    // Copy color table if grayscale
+    if(img->bitDepth <= 8)
+        memcpy(edgeImg->colorTable,img->colorTable,BMP_COLOR_TABLE_SIZE);
 
     int rowSize = (img->width + 3) & ~3;
     edgeImg->imgSize = rowSize * img->height;
-
-    // Allocate memory for pixel data
     edgeImg->data = malloc(edgeImg->imgSize);
 
-    // Combine horizontal and vertical edges
-    for(int y = 0; y < img->height; y++){
-        for(int x = 0; x < img->width; x++){
-            int idx = y * img->width + x;
-            // horizontal
-            int gx = horizontal->data[idx];
-            // vertical
-            int gy = vertical->data[idx];
-            // Compute mean magnitude
+    // Combine horizontal and vertical edge images
+    for(int y=0;y<img->height;y++){
+        for(int x=0;x<img->width;x++){
+            int idx = y*img->width+x;
+
+            // Retrieve horizontal and vertical edge values
+            int gx = Gx->data[idx];
+            int gy = Gy->data[idx];
+
+            // Compute magnitude of gradient
             int g = (int)(sqrt(gx*gx + gy*gy));
             g = MIN(g, MAX_BRIGHTNESS);
 
@@ -281,12 +264,13 @@ BMP8Image* BMP8EdgeDetectionPrewittCombined(BMP8Image* img){
     }
 
     // Free temporary horizontal and vertical images
-    BMP8Free(horizontal);
-    BMP8Free(vertical);
+    BMP8Free(Gx);
+    BMP8Free(Gy);
 
-    // Return combined edge image
+    // Return the combined edge image
     return edgeImg;
 }
+
 
 // Function to save an 8-bit BMP image to a file
 void BMP8save(const char* filename, BMP8Image* img) {
@@ -308,12 +292,13 @@ void BMP8save(const char* filename, BMP8Image* img) {
 }
 
 int main(){
+    // Input BMP file (8-bit grayscale)
     const char *inputFile  = "../Test_Images/lizard_greyscale8bit.bmp";
 
-    // Output files
-    const char *outputHorizontal = "images/lizard_edges_horizontal.bmp";
-    const char *outputVertical   = "images/lizard_edges_vertical.bmp";
-    const char *outputCombined   = "images/lizard_edges_combined.bmp";
+    // Output file paths for edge detection results
+    const char *outputGx      = "images/lizard_roberts_gx.bmp";
+    const char *outputGy      = "images/lizard_roberts_gy.bmp";
+    const char *outputCombined= "images/lizard_roberts_combined.bmp";
 
     // Read the original BMP image
     BMP8Image *image = BMP8read(inputFile);
@@ -322,17 +307,17 @@ int main(){
         return 1;
     }
 
-    // Apply horizontal edge detection
-    BMP8Image *horizontal = BMP8EdgeDetectionPrewittHorizontal(image);
-    BMP8save(outputHorizontal, horizontal);
+    // Compute horizontal edges using Roberts Gx
+    BMP8Image *horizontal = BMP8EdgeDetectionRobertsGx(image);
+    BMP8save(outputGx, horizontal); // Save result to file
 
-    // Apply vertical edge detection
-    BMP8Image *vertical = BMP8EdgeDetectionPrewittVertical(image);
-    BMP8save(outputVertical, vertical);
+    // Compute vertical edges using Roberts Gy
+    BMP8Image *vertical = BMP8EdgeDetectionRobertsGy(image);
+    BMP8save(outputGy, vertical); // Save result to file
 
-    // Apply combined edge detection
-    BMP8Image *combined = BMP8EdgeDetectionPrewittCombined(image);
-    BMP8save(outputCombined, combined);
+    // Compute combined edges magnitude
+    BMP8Image *combined = BMP8EdgeDetectionRobertsCombined(image);
+    BMP8save(outputCombined, combined); // Save result to file
 
     // Free all allocated memory
     BMP8Free(image);
@@ -340,8 +325,10 @@ int main(){
     BMP8Free(vertical);
     BMP8Free(combined);
 
-    printf("Prewitt edge detection completed!\nHorizontal: %s\nVertical: %s\nCombined: %s\n",
-           outputHorizontal, outputVertical, outputCombined);
+    // Print completion message
+    printf("Roberts edge detection completed!\n");
+    printf("Horizontal: %s\nVertical: %s\nCombined: %s\n",
+           outputGx, outputGy, outputCombined);
 
     return 0;
 }
